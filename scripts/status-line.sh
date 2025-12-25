@@ -39,11 +39,11 @@ fi
 
 # 設定スコープを判定
 config_scope=""
-if [ -f .claude/settings.local.json ]; then
-  config_scope="${config_scope}L"
-fi
 if [ -f .claude/settings.json ]; then
   config_scope="${config_scope}P"
+fi
+if [ -f .claude/settings.local.json ]; then
+  config_scope="${config_scope}L"
 fi
 if [ -z "$config_scope" ]; then
   config_scope="U"

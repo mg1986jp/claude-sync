@@ -39,13 +39,17 @@ elif [ "$NPM_AVAILABLE" = false ]; then
   echo "Warning: npm not found. Cannot configure MCP Puppeteer (requires npx)."
 else
   echo "Configuring MCP Puppeteer..."
-  if claude mcp add --transport stdio --scope user puppeteer -- npx -y @modelcontextprotocol/server-puppeteer 2>&1; then
-    echo "✓ MCP Puppeteer configured successfully"
-    echo "Verify with: claude -r, then /mcp"
+  if claude mcp list 2>/dev/null | grep -q "puppeteer"; then
+    echo "✓ MCP Puppeteer is already configured"
   else
-    echo "✗ MCP Puppeteer configuration may have failed"
-    echo "Please verify with 'claude -r' and '/mcp'"
+    if claude mcp add --transport stdio --scope user puppeteer -- npx -y @modelcontextprotocol/server-puppeteer 2>&1; then
+      echo "✓ MCP Puppeteer configured successfully"
+    else
+      echo "✗ MCP Puppeteer configuration failed"
+      echo "Please configure manually: claude mcp add --transport stdio --scope user puppeteer -- npx -y @modelcontextprotocol/server-puppeteer"
+    fi
   fi
+  echo "Verify with: claude, then /mcp"
 fi
 
 echo ""

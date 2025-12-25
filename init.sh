@@ -27,6 +27,41 @@ if [ "$NPM_AVAILABLE" = true ]; then
       echo "✗ Failed to install claude-code-ui"
     fi
   fi
+
+  # claude-code-ui の auth.db 初期化チェック
+  # npmパッケージにデフォルトのauth.db（adminユーザー）が含まれているため、
+  # 初回起動時に登録画面ではなくログイン画面が表示される問題への対処
+  NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null)"
+
+  if [ -z "$NPM_GLOBAL_ROOT" ]; then
+    echo "Warning: Could not determine npm global root. Skipping auth.db check."
+  elif [ -d "$NPM_GLOBAL_ROOT/@siteboon/claude-code-ui" ]; then
+    CLAUDE_CODE_UI_DIR="$NPM_GLOBAL_ROOT/@siteboon/claude-code-ui"
+    # auth.db を動的に検索（パッケージ内の配置場所が変わっても対応）
+    AUTH_DB_PATH=$(find "$CLAUDE_CODE_UI_DIR" -name "auth.db" -type f 2>/dev/null | head -n 1)
+
+    if [ -n "$AUTH_DB_PATH" ]; then
+      if command -v sqlite3 &> /dev/null; then
+        # auth.db内のユーザー名を取得
+        USERNAME=$(sqlite3 "$AUTH_DB_PATH" "SELECT username FROM users LIMIT 1;" 2>/dev/null || echo "")
+
+        if [ "$USERNAME" = "admin" ]; then
+          # パッケージのデフォルトユーザー → 削除して登録画面を表示させる
+          echo "Removing default auth.db (package includes pre-registered 'admin' user)..."
+          rm -f "$AUTH_DB_PATH"
+          echo "✓ Default auth.db removed. You will see registration screen on first launch."
+        elif [ -n "$USERNAME" ]; then
+          # admin以外のユーザー → ユーザーが既に登録済み
+          echo "✓ User '$USERNAME' already registered. Keeping auth.db."
+        fi
+        # USERNAMEが空の場合（ユーザーなし）は何もしない
+      else
+        echo "Warning: sqlite3 not found. Cannot verify auth.db contents."
+        echo "If you see a login screen instead of registration, manually delete:"
+        echo "  $AUTH_DB_PATH"
+      fi
+    fi
+  fi
 fi
 
 # MCP Puppeteer を設定（Claude Code CLI がインストール済みの場合のみ）

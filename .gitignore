@@ -1,0 +1,44 @@
+# ===========================================
+# Claude Code - Git Ignore
+# ===========================================
+
+# ----- Session & History Data -----
+history.jsonl
+session-env/
+shell-snapshots/
+file-history/
+
+# ----- Personal Data -----
+todos/
+plans/
+projects/
+settings.local.json
+project-config.json
+
+# ----- Cache & Analytics -----
+stats-cache.json
+statsig/
+
+# ----- Debug Logs -----
+debug/
+
+# ----- Lock Files -----
+.update.lock
+
+# ----- Plugins -----
+plugins/
+
+# ----- macOS -----
+.DS_Store
+*.swp
+*~
+
+# ----- Node.js (for MCP servers) -----
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ----- IDE -----
+.idea/
+.vscode/
+*.sublime-*

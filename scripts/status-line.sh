@@ -20,6 +20,11 @@ total_input=$(get_json_number "$input" "total_input_tokens")
 total_output=$(get_json_number "$input" "total_output_tokens")
 context_size=$(get_json_number "$input" "context_window_size")
 
+# デフォルト値を設定（JSON解析失敗時の対策）
+total_input=${total_input:-0}
+total_output=${total_output:-0}
+context_size=${context_size:-0}
+
 # コンテキスト使用率を計算
 total_tokens=$((total_input + total_output))
 if [ "$context_size" -gt 0 ]; then

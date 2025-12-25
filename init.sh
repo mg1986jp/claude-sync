@@ -32,9 +32,11 @@ if [ "$NPM_AVAILABLE" = true ]; then
   # npmパッケージにデフォルトのauth.db（adminユーザー）が含まれているため、
   # 初回起動時に登録画面ではなくログイン画面が表示される問題への対処
   NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null)"
-  CLAUDE_CODE_UI_DIR="$NPM_GLOBAL_ROOT/@siteboon/claude-code-ui"
 
-  if [ -d "$CLAUDE_CODE_UI_DIR" ]; then
+  if [ -z "$NPM_GLOBAL_ROOT" ]; then
+    echo "Warning: Could not determine npm global root. Skipping auth.db check."
+  elif [ -d "$NPM_GLOBAL_ROOT/@siteboon/claude-code-ui" ]; then
+    CLAUDE_CODE_UI_DIR="$NPM_GLOBAL_ROOT/@siteboon/claude-code-ui"
     # auth.db を動的に検索（パッケージ内の配置場所が変わっても対応）
     AUTH_DB_PATH=$(find "$CLAUDE_CODE_UI_DIR" -name "auth.db" -type f 2>/dev/null | head -n 1)
 

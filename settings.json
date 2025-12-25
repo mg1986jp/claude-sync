@@ -1,0 +1,40 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/scripts/status-line.sh"
+  },
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read(//**)",
+      "Edit(//**)",
+      "Write(//**)",
+      "Glob(//**)",
+      "Grep(//**)",
+      "Task(**)",
+      "NotebookEdit(//**)",
+      "WebFetch",
+      "WebSearch",
+      "AskUserQuestion",
+      "mcp__puppeteer"
+    ],
+    "deny": [
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf /*:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf ~/*:*)",
+      "Bash(dd if=/dev/zero:*)",
+      "Bash(dd if=/dev/random:*)",
+      "Bash(mkfs:*)",
+      "Bash(fdisk:*)",
+      "Bash(parted:*)",
+      "Bash(shutdown:*)",
+      "Bash(reboot:*)",
+      "Bash(poweroff:*)",
+      "Bash(halt:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)"
+    ]
+  }
+}

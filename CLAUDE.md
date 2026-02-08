@@ -31,6 +31,46 @@
 - **新規パッケージ追加時はバージョンと理由を明示** - なぜそのパッケージが必要か、バージョンは適切か説明する
 - **既存依存との競合可能性は事前言及** - 追加前に依存関係の問題を予測する
 
+### システムへのパッケージインストール禁止（最重要）
+
+#### ホストMacへのインストールは絶対禁止
+以下のコマンドは**ホストマシン上で絶対に実行しない**（確認も不要、単に禁止）：
+- `brew install`, `brew upgrade`, `brew tap`
+- `pip install`, `pip install --user`（ホスト環境）
+- `npm install -g`, `yarn global add`, `pnpm add -g`
+- `gem install`（システムRuby）
+- `cargo install`, `go install`（グローバル）
+- その他ホストのパッケージマネージャーコマンド
+
+#### 代わりにDockerコンテナを使用
+システムパッケージが必要な処理は、**Dockerコンテナ内で自動実行**する：
+
+1. **必要なツールを含むDockerfileを作成**（またはベースイメージを使用）
+2. **コンテナ内で処理を完結**させ、結果のみホストに出力
+3. **ユーザーへの確認は不要** - 自動で進めてよい
+
+```bash
+# 例: PDF解析（tesseract必要）
+docker run --rm -v "$(pwd):/work" -w /work \
+  tesseractshadow/tesseract4re \
+  tesseract input.pdf output -l jpn
+
+# 例: 画像処理（ImageMagick必要）
+docker run --rm -v "$(pwd):/work" -w /work \
+  dpokidov/imagemagick \
+  convert input.png output.jpg
+```
+
+#### 許可される操作（ホスト上）
+- **プロジェクト内の依存関係**: `npm install`, `yarn install`（package.json管理下）
+- **Python仮想環境内**: venv/condaがアクティブな場合の`pip install`
+- **Dockerコマンド**: `docker run`, `docker build` 等（コンテナ操作）
+
+#### 注意
+- Dockerがインストールされていない場合のみ、その旨を報告して処理を中断する
+- 一時的なコンテナは `--rm` で自動削除する
+- 大きなイメージを使う場合は初回のみpullに時間がかかる旨を出力する
+
 ### Git操作（最重要）
 
 #### 原則

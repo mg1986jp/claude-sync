@@ -18,6 +18,8 @@ project-config.json
 # ----- Cache & Analytics -----
 stats-cache.json
 statsig/
+*cache/
+telemetry/*
 
 # ----- Debug Logs -----
 debug/

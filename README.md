@@ -75,7 +75,7 @@ claude
 ```
 
 **確認ポイント**:
-- 画面右下に`[U]`と表示される → User設定（このリポジトリの設定）が読み込まれています
+- 画面下部のstatusLineに`settings: ~/.claude/settings.json`と表示される → User設定（このリポジトリの設定）が読み込まれています
 - 危険なコマンドがブロックされるか試す（例: `rm -rf /tmp/test`）→ 拒否されれば成功
 
 **MCP Puppeteerの確認**:
@@ -114,11 +114,15 @@ Claude Codeは複数の設定ファイルを優先順位に従って読み込み
 
 **このリポジトリの利点**: プロジェクト内に設定ファイルを作らなくても、全てのプロジェクトで同じ権限設定・AI指示が自動適用されます。特定のプロジェクトだけカスタマイズしたい場合のみ、プロジェクト設定を追加すればOKです。
 
-**statusLineで確認可能**: 画面右下に表示される設定スコープで、どの設定が有効か確認できます。
-- `[U]` - User設定のみ（このリポジトリの設定）
-- `[P]` - Project設定あり
-- `[L]` - Local設定あり
-- `[PL]` - Project + Local 両方あり
+**statusLineで確認可能**: 画面下部のstatusLineで、どの設定ファイルが適用されているか確認できます。
+
+```text
+settings: ~/.claude/settings.json
+```
+User設定のみの場合。プロジェクト設定がある場合は優先順位付きで表示されます:
+```text
+settings: ~/.claude/settings.json < ~/project/.claude/settings.json < ~/project/.claude/settings.local.json
+```
 
 ## カスタマイズ
 
@@ -170,10 +174,10 @@ claude
 
 ### 設定が反映されない
 
-**確認方法**: 画面右下のstatusLineで`[U]`が表示されているか確認
+**確認方法**: 画面下部のstatusLineで`settings: ~/.claude/settings.json`が表示されているか確認
 
 **対処方法**:
-- プロジェクト内に`.claude/settings.json`や`.claude/settings.local.json`がある場合、そちらが優先されます
+- プロジェクト内に`.claude/settings.json`や`.claude/settings.local.json`がある場合、そちらが優先されます（statusLineの`settings:`行で確認可能）
 - プロジェクト固有の設定を削除するか、このリポジトリの設定をプロジェクト設定にコピーしてください
 
 ## 別のMacでのセットアップ

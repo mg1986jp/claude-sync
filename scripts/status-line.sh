@@ -152,7 +152,7 @@ session_meta="${transcript_path%.jsonl}.meta.json"
 if [ -f "$session_meta" ]; then
   saved_branch=$(jq -r '.branch // "-"' "$session_meta" 2>/dev/null || echo "-")
   if [ "$git_branch" != "$saved_branch" ]; then
-    git_branch="${git_branch} (last: ${saved_branch})"
+    git_branch="${git_branch} | last => ${saved_branch}"
   fi
 fi
 echo "{\"branch\":\"${git_branch%%' '*}\"}" > "$session_meta"

@@ -6,13 +6,18 @@ set -euo pipefail
 # ==================================================
 readonly ANSI_RED="\033[31m"
 readonly ANSI_YELLOW="\033[33m"
-readonly ANSI_GREEN="\033[32m"
 readonly ANSI_RESET="\033[0m"
 
 readonly TOTAL_CONTEXT_WARN_K=3000
 readonly TOTAL_CONTEXT_DANGER_K=5000
 readonly CURRENT_CONTEXT_WARN_PCT=75
 readonly CURRENT_CONTEXT_DANGER_PCT=90
+readonly RATE_LIMIT_WARN_PCT=75
+readonly RATE_LIMIT_DANGER_PCT=90
+readonly CREATED_WARN_DAYS=15
+readonly CREATED_DANGER_DAYS=30
+readonly COST_WARN_USD=150
+readonly COST_DANGER_USD=200
 
 readonly DEFAULT_CONTEXT_SIZE=200000
 readonly USER_SETTINGS="~/.claude/settings.json"
@@ -68,16 +73,16 @@ shorten_path() {
   echo "$1" | sed "s|^$HOME|~|"
 }
 
-# 値を色付きで返す（値, 警告閾値, 危険閾値, フォーマット済み文字列）
+# 値が閾値を超えた場合のみ色付きで返す（超えなければ色なし）
 apply_threshold_color() {
   local value=$1 warn=$2 danger=$3 text=$4
-  local color="$ANSI_GREEN"
   if [ "$value" -ge "$danger" ]; then
-    color="$ANSI_RED"
+    echo "${ANSI_RED}${text}${ANSI_RESET}"
   elif [ "$value" -ge "$warn" ]; then
-    color="$ANSI_YELLOW"
+    echo "${ANSI_YELLOW}${text}${ANSI_RESET}"
+  else
+    echo "$text"
   fi
-  echo "${color}${text}${ANSI_RESET}"
 }
 
 # ==================================================
@@ -132,10 +137,20 @@ total_duration_sec=$((total_duration_ms / 1000))
 created_epoch=$(($(date +%s) - total_duration_sec))
 created_time=$(LANG=C date -r "$created_epoch" '+%Y-%m-%d %a %H:%M:%S')
 api_duration_display=$(format_duration "$((total_api_duration_ms / 60000))")
+created_age_days=$((total_duration_sec / 86400))
+created_time_display=$(apply_threshold_color "$created_age_days" "$CREATED_WARN_DAYS" "$CREATED_DANGER_DAYS" "$created_time")
 
 # レート制限リセット日時
 rate_limit_5h_resets_display=$(LANG=C date -r "$rate_limit_5h_resets" '+%Y-%m-%d %a %H:%M' 2>/dev/null || echo "$rate_limit_5h_resets")
 rate_limit_7d_resets_display=$(LANG=C date -r "$rate_limit_7d_resets" '+%Y-%m-%d %a %H:%M' 2>/dev/null || echo "$rate_limit_7d_resets")
+rate_limit_5h_int=$(printf "%.0f" "$rate_limit_5h")
+rate_limit_7d_int=$(printf "%.0f" "$rate_limit_7d")
+rate_limit_5h_display=$(apply_threshold_color "$rate_limit_5h_int" "$RATE_LIMIT_WARN_PCT" "$RATE_LIMIT_DANGER_PCT" "${rate_limit_5h_int}%")
+rate_limit_7d_display=$(apply_threshold_color "$rate_limit_7d_int" "$RATE_LIMIT_WARN_PCT" "$RATE_LIMIT_DANGER_PCT" "${rate_limit_7d_int}%")
+
+# コスト
+cost_int=$(printf "%.0f" "$total_cost_usd")
+cost_display=$(apply_threshold_color "$cost_int" "$COST_WARN_USD" "$COST_DANGER_USD" "\$$(printf '%.2f' "$total_cost_usd")")
 
 # パス短縮
 short_dir=$(shorten_path "$project_dir")
@@ -165,10 +180,10 @@ printf "model: %s | %s\n" "$model_name" "$model_id"
 printf "workspace: %s\n" "$short_dir"
 printf "branch: %s\n" "$git_branch"
 printf "settings: %s\n" "$settings_line"
-printf "created-at: %s (%s)\n" "$created_time" "$api_duration_display"
+printf "created-at: %b (%s)\n" "$created_time_display" "$api_duration_display"
 printf "context-total: %b\n" "$total_context_display"
 printf "context-current: %b / %sk\n" "$current_context_display" "$context_k"
-printf "rate-limit-week: %.0f%% / %s\n" "$rate_limit_7d" "$rate_limit_7d_resets_display"
-printf "rate-limit-current: %.0f%% / %s\n" "$rate_limit_5h" "$rate_limit_5h_resets_display"
+printf "rate-limit-week: %b / %s\n" "$rate_limit_7d_display" "$rate_limit_7d_resets_display"
+printf "rate-limit-current: %b / %s\n" "$rate_limit_5h_display" "$rate_limit_5h_resets_display"
 printf "transcript: %s\n" "$short_transcript"
-printf "cost: \$%.2f\n" "$total_cost_usd"
+printf "cost: %b\n" "$cost_display"

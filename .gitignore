@@ -4,12 +4,14 @@
 
 # ----- Session & History Data -----
 history.jsonl
+sessions/
 session-env/
 shell-snapshots/
 file-history/
 
 # ----- Personal Data -----
 todos/
+tasks/
 plans/
 projects/
 settings.local.json
@@ -29,6 +31,10 @@ debug/
 
 # ----- Plugins -----
 plugins/
+
+# ----- Backup Files -----
+backups/
+*.bak.*
 
 # ----- macOS -----
 .DS_Store

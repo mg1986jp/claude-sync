@@ -152,7 +152,7 @@ session_meta="${transcript_path%.jsonl}.meta.json"
 if [ -f "$session_meta" ]; then
   saved_branch=$(jq -r '.branch // "-"' "$session_meta" 2>/dev/null || echo "-")
   if [ "$git_branch" != "$saved_branch" ]; then
-    git_branch="${git_branch} | last => ${saved_branch}"
+    git_branch="${git_branch} | \033[1mlast => ${saved_branch}\033[0m"
   fi
 fi
 echo "{\"branch\":\"${git_branch%%' '*}\"}" > "$session_meta"
@@ -170,9 +170,9 @@ fi
 # 出力
 # ==================================================
 printf "cli-version: %s\n" "$version"
-printf "model: %s / %s\n" "$model_name" "$model_id"
+printf "model: %s | %s\n" "$model_name" "$model_id"
 printf "workspace: %s\n" "$short_dir"
-printf "branch: %s\n" "$git_branch"
+printf "branch: %b\n" "$git_branch"
 printf "settings: %s\n" "$settings_line"
 printf "created-at: %s (%s)\n" "$created_time" "$api_duration_display"
 printf "context-total: %b\n" "$total_context_display"

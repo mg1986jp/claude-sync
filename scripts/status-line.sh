@@ -16,22 +16,17 @@ input=$(cat)
 # JSON値を抽出
 current_dir=$(get_json_value "$input" "current_dir")
 model_name=$(get_json_value "$input" "display_name")
-total_input=$(get_json_number "$input" "total_input_tokens")
-total_output=$(get_json_number "$input" "total_output_tokens")
 context_size=$(get_json_number "$input" "context_window_size")
+used_percent=$(get_json_number "$input" "used_percentage")
 
 # デフォルト値を設定（JSON解析失敗時の対策）
-total_input=${total_input:-0}
-total_output=${total_output:-0}
-context_size=${context_size:-0}
+context_size=${context_size:-200000}
+used_percent=${used_percent:-0}
 
-# コンテキスト使用率を計算
-total_tokens=$((total_input + total_output))
-if [ "$context_size" -gt 0 ]; then
-  usage_percent=$(awk "BEGIN {printf \"%.1f\", ($total_tokens / $context_size) * 100}")
-else
-  usage_percent="0.0"
-fi
+# 現在の使用トークン数を計算（used_percentage から逆算）
+used_tokens=$(awk "BEGIN {printf \"%.0f\", ($context_size * $used_percent / 100)}")
+used_k=$(awk "BEGIN {printf \"%.0f\", ($used_tokens / 1000)}")
+context_k=$(awk "BEGIN {printf \"%.0f\", ($context_size / 1000)}")
 
 # Gitブランチ情報を取得
 git_branch=""
@@ -55,4 +50,4 @@ if [ -z "$config_scope" ]; then
 fi
 
 # ステータスラインを出力
-printf "%s | %s%s | [%s] | context: %s%%" "$model_name" "$current_dir" "$git_branch" "$config_scope" "$usage_percent"
+printf "%s | %s%s | [%s] | context: %sk(%s%%) / %sk" "$model_name" "$current_dir" "$git_branch" "$config_scope" "$used_k" "$used_percent" "$context_k"

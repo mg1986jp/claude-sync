@@ -41,5 +41,6 @@
     "type": "command",
     "command": "bash ~/.claude/scripts/status-line.sh"
   },
-  "language": "Japanese"
+  "language": "Japanese",
+  "outputStyle": "Explanatory"
 }

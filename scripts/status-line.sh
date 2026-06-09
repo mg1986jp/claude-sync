@@ -141,21 +141,12 @@ rate_limit_7d_resets_display=$(LANG=C date -r "$rate_limit_7d_resets" '+%Y-%m-%d
 short_dir=$(shorten_path "$project_dir")
 short_transcript=$(shorten_path "$transcript_path")
 
-# git ブランチ（現在のブランチ + 前回ブランチと比較）
+# git ブランチ
 git_branch="-"
 if git rev-parse --git-dir > /dev/null 2>&1; then
   git_branch=$(git -c core.fileMode=false -c core.fsmonitor=false branch --show-current 2>/dev/null || echo "-")
   git_branch=${git_branch:-"-"}
 fi
-
-session_meta="${transcript_path%.jsonl}.meta.json"
-if [ -f "$session_meta" ]; then
-  saved_branch=$(jq -r '.branch // "-"' "$session_meta" 2>/dev/null || echo "-")
-  if [ "$git_branch" != "$saved_branch" ]; then
-    git_branch="${git_branch} | \033[1mlast => ${saved_branch}\033[0m"
-  fi
-fi
-echo "{\"branch\":\"${git_branch%%' '*}\"}" > "$session_meta"
 
 # settings マージ状況
 settings_line="$USER_SETTINGS"
@@ -172,7 +163,7 @@ fi
 printf "cli-version: %s\n" "$version"
 printf "model: %s | %s\n" "$model_name" "$model_id"
 printf "workspace: %s\n" "$short_dir"
-printf "branch: %b\n" "$git_branch"
+printf "branch: %s\n" "$git_branch"
 printf "settings: %s\n" "$settings_line"
 printf "created-at: %s (%s)\n" "$created_time" "$api_duration_display"
 printf "context-total: %b\n" "$total_context_display"

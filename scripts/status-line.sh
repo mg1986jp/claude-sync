@@ -89,7 +89,6 @@ apply_threshold_color() {
 # データ取得（JSON構造順）
 # ==================================================
 input=$(cat)
-echo "$(date '+%H:%M:%S') $(echo "$input" | jq -c '{ti: .context_window.total_input_tokens, to: .context_window.total_output_tokens, pct: .context_window.used_percentage}' 2>/dev/null)" >> /tmp/statusline-debug.log
 
 # transcript_path
 transcript_path=$(get_json ".transcript_path")

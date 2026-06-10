@@ -151,11 +151,18 @@ fi
 
 # settings マージ状況
 settings_line="$USER_SETTINGS"
+global_real=$(cd "$HOME" && realpath ".claude/settings.json" 2>/dev/null || echo "")
 if [ -f "$PROJECT_SETTINGS" ]; then
-  settings_line="${settings_line} < ${short_dir}/${PROJECT_SETTINGS}"
+  project_real=$(realpath "$PROJECT_SETTINGS" 2>/dev/null || echo "")
+  if [ "$project_real" != "$global_real" ]; then
+    settings_line="${settings_line} < ${short_dir}/${PROJECT_SETTINGS}"
+  fi
 fi
 if [ -f "$LOCAL_SETTINGS" ]; then
-  settings_line="${settings_line} < ${short_dir}/${LOCAL_SETTINGS}"
+  local_real=$(realpath "$LOCAL_SETTINGS" 2>/dev/null || echo "")
+  if [ "$local_real" != "$global_real" ]; then
+    settings_line="${settings_line} < ${short_dir}/${LOCAL_SETTINGS}"
+  fi
 fi
 
 # セッション作成日時・API待ち時間

@@ -81,6 +81,12 @@ shorten_path() {
   echo "${1/#$HOME/~}"
 }
 
+# UNIXエポックを日時文字列に変換（macOS: date -r, Linux: date -d で両対応）
+format_epoch() {
+  local epoch=$1 format=$2
+  LANG=C date -r "$epoch" "$format" 2>/dev/null || LANG=C date -d "@$epoch" "$format" 2>/dev/null || echo "$epoch"
+}
+
 # 値が閾値を超えた場合のみ色付きで返す（超えなければ色なし）
 apply_threshold_color() {
   local value=$1 warn=$2 danger=$3 text=$4
@@ -155,7 +161,7 @@ fi
 # セッション作成日時・API待ち時間
 total_duration_sec=$((total_duration_ms / 1000))
 created_epoch=$(($(date +%s) - total_duration_sec))
-created_time=$(LANG=C date -r "$created_epoch" '+%Y-%m-%d %a %H:%M:%S')
+created_time=$(format_epoch "$created_epoch" '+%Y-%m-%d %a %H:%M:%S')
 api_duration_display=$(format_duration "$((total_api_duration_ms / 60000))")
 created_age_days=$((total_duration_sec / 86400))
 created_time_display=$(apply_threshold_color "$created_age_days" "$CREATED_WARN_DAYS" "$CREATED_DANGER_DAYS" "$created_time")
@@ -168,8 +174,8 @@ total_context_display=$(apply_threshold_color "$total_k" "$TOTAL_CONTEXT_WARN_K"
 current_context_display=$(apply_threshold_color "$used_percent" "$CURRENT_CONTEXT_WARN_PCT" "$CURRENT_CONTEXT_DANGER_PCT" "${used_k}k(${used_percent}%)")
 
 # レート制限
-rate_limit_5h_resets_display=$(LANG=C date -r "$rate_limit_5h_resets" '+%Y-%m-%d %a %H:%M' 2>/dev/null || echo "$rate_limit_5h_resets")
-rate_limit_7d_resets_display=$(LANG=C date -r "$rate_limit_7d_resets" '+%Y-%m-%d %a %H:%M' 2>/dev/null || echo "$rate_limit_7d_resets")
+rate_limit_5h_resets_display=$(format_epoch "$rate_limit_5h_resets" '+%Y-%m-%d %a %H:%M')
+rate_limit_7d_resets_display=$(format_epoch "$rate_limit_7d_resets" '+%Y-%m-%d %a %H:%M')
 rate_limit_5h_int=$(printf "%.0f" "$rate_limit_5h")
 rate_limit_7d_int=$(printf "%.0f" "$rate_limit_7d")
 rate_limit_5h_display=$(apply_threshold_color "$rate_limit_5h_int" "$RATE_LIMIT_WARN_PCT" "$RATE_LIMIT_DANGER_PCT" "${rate_limit_5h_int}%")

@@ -1,197 +1,122 @@
 # claude-sync
 
-複数のMac間でClaude Code CLIの設定を共有するためのリポジトリです。
+複数Mac間でClaude Code CLIの設定を共有するためのリポジトリ。<br>
+`~/.claude` にクローンすることで、全プロジェクトに共通設定が自動適用される。
 
-## このリポジトリで何ができるか
+## 主な機能
 
-- **複数Mac間での設定共有**: 別のMacでも同じClaude Code環境をすぐに構築できます
-- **権限設定の自動化**: 危険なコマンド（`rm -rf /`、`git push --force`等）を自動的にブロックします
-- **ブラウザ操作機能**: MCP Puppeteerにより、Claudeがブラウザを操作できるようになります
-- **AI指示の統一**: コミットメッセージ形式や開発方針をClaude Code全体で統一できます
+| 機能 | 説明 |
+|------|------|
+| 設定の共有 | 別のMacでも同じClaude Code環境をすぐに構築できる |
+| 権限制御 | 危険なコマンド（`rm -rf /`、`git push --force` 等）を自動ブロック |
+| ブラウザ操作 | MCP Puppeteerにより、Claudeがブラウザを操作可能 |
+| AI指示の統一 | コミットメッセージ形式や開発方針をCLAUDE.mdで一元管理 |
 
 ## セットアップ
 
 ### 前提条件
 
-以下のソフトウェアが必要です。未インストールの場合は先にインストールしてください。
+| 種別 | ツール | 確認コマンド | インストール |
+|------|--------|-------------|-------------|
+| 必須 | Claude Code CLI | `claude --version` | https://code.claude.com/docs/ja/setup |
+| オプション | Node.js / npm | `npm --version` | https://nodejs.org/ |
 
-#### 必須
-- **Claude Code CLI** - このリポジトリの設定を適用するために必要です
-  - インストール: [公式ガイド](https://code.claude.com/docs/ja/setup)
-  - 確認方法: `claude --version`
+※ Node.js / npm はブラウザ操作機能（MCP Puppeteer）を使う場合に必要。
 
-#### オプション（ブラウザ操作機能を使う場合）
-- **Node.js / npm** - MCP Puppeteerのインストールに必要です
-  - インストール: [公式サイト](https://nodejs.org/)
-  - 確認方法: `npm --version`
-
-### 1. 既存設定のバックアップ
-
-既に`~/.claude`ディレクトリが存在する場合、上書きされてしまうため先にバックアップします。
+### 手順
 
 ```bash
-# ~/.claudeが存在する場合のみ実行してください
+# 1. 既存設定のバックアップ（~/.claude が存在する場合のみ）
 if [ -d ~/.claude ]; then
   mv ~/.claude ~/.claude_$(date +"%Y%m%d%H%M%S")
-  echo "既存の~/.claudeをバックアップしました"
 fi
-```
 
-### 2. リポジトリのクローン
-
-このリポジトリを`~/.claude`にクローンします。
-
-```bash
+# 2. クローン
 git clone git@github.com:mg1986jp/claude-sync.git ~/.claude
 cd ~/.claude
-```
 
-**結果**: `~/.claude`に設定ファイル（settings.json、CLAUDE.md等）が配置されます。
-
-### 3. セットアップスクリプトの実行
-
-`init.sh`を実行して、追加機能をインストールします。
-
-```bash
+# 3. セットアップスクリプト実行
 bash init.sh
 ```
 
-**実行される内容**:
-1. **claude-code-ui のインストール** - Claude Codeの操作UIツール（未インストールの場合のみ）
-2. **MCP Puppeteerの設定** - ブラウザ操作機能の有効化（Claude Code CLIとnpmが両方インストールされている場合のみ）
+`init.sh` の実行内容:
+- **claude-code-ui のインストール** — Claude Codeの操作UIツール（npm必須）
+- **MCP Puppeteer の設定** — ブラウザ操作機能の有効化（Claude Code CLI + npm 必須）
 
-**スキップされる場合**:
-- Claude Code CLIが未インストール → MCP Puppeteer設定がスキップされます
-  - **対処方法**: Claude Code CLIをインストール後、再度`bash init.sh`を実行してください
-- npmが未インストール → claude-code-ui とMCP Puppeteer設定がスキップされます
-  - **対処方法**: Node.js/npmをインストール後、再度`bash init.sh`を実行してください
+前提条件を満たさない機能はスキップされる。<br>
+該当ツールをインストール後に `bash init.sh` を再実行すれば有効化される。
 
-### 4. 動作確認
+### 動作確認
 
-Claude Codeを起動して設定が反映されているか確認します。
+Claude Code を起動して以下を確認する。
 
 ```bash
 claude
 ```
 
-**確認ポイント**:
-- 画面下部のstatusLineに`settings: ~/.claude/settings.json`と表示される → User設定（このリポジトリの設定）が読み込まれています
-- 危険なコマンドがブロックされるか試す（例: `rm -rf /tmp/test`）→ 拒否されれば成功
+| 確認項目 | 期待結果 |
+|---------|---------|
+| 設定の読み込み | statusLine の `settings:` 行に `~/.claude/settings.json` が表示される（→「[設定の適用範囲](#設定の適用範囲)」参照） |
+| 権限制御 | `rm -rf /tmp/test` のような危険なコマンドがブロックされる |
+| MCP Puppeteer（オプション） | `/mcp` を実行して `puppeteer ✔ connected` と表示される |
 
-**MCP Puppeteerの確認**:
-```bash
-claude
-/mcp
-```
+## ファイル構成
 
-**期待される表示**:
-```text
- 1 server
-
- ❯ 1. puppeteer  ✔ connected
-```
-`puppeteer ✔ connected`と表示されればブラウザ操作機能が使えます。
-
-## このリポジトリに含まれるファイル
-
-- **settings.json** - 権限設定とstatusLine設定（全プロジェクトで有効）
-- **CLAUDE.md** - Claudeへの指示（開発方針、Git規約等）
-- **init.sh** - claude-code-ui とMCP Puppeteerのセットアップスクリプト
-- **scripts/status-line.sh** - statusLine表示用スクリプト
-- **.gitignore** - 個人データ（セッション履歴等）を除外
+| ファイル | 役割 |
+|---------|------|
+| `settings.json` | 権限設定、statusLine設定、環境変数（全プロジェクトで有効） |
+| `CLAUDE.md` | Claudeへの指示（開発方針、Git規約、コミュニケーションスタイル等） |
+| `init.sh` | claude-code-ui と MCP Puppeteer のセットアップスクリプト |
+| `scripts/status-line.sh` | statusLine 表示用スクリプト |
+| `.gitignore` | 個人データ（セッション履歴等）を除外 |
 
 ## 設定の適用範囲
 
-このリポジトリは`~/.claude/settings.json`（User設定）として機能します。これにより、**全てのプロジェクトで共通の設定が自動的に適用されます**。プロジェクト毎に`.claude/settings.json`を作成・管理する手間を省くことができます。
+`~/.claude` にクローンした本リポジトリが Global 設定（`~/.claude/settings.json`）として機能する。<br>
+全プロジェクトに自動適用されるため、プロジェクト毎に設定ファイルを作る必要がない。
 
-Claude Codeは複数の設定ファイルを優先順位に従って読み込みます。
-
-```text
-優先度（高） 1. .claude/settings.local.json  - プロジェクト固有、個人用
-           2. .claude/settings.json        - プロジェクト固有、チーム共有
-優先度（低） 3. ~/.claude/settings.json      - 全プロジェクト共通（このリポジトリの設定）
-```
-
-**このリポジトリの利点**: プロジェクト内に設定ファイルを作らなくても、全てのプロジェクトで同じ権限設定・AI指示が自動適用されます。特定のプロジェクトだけカスタマイズしたい場合のみ、プロジェクト設定を追加すればOKです。
-
-**statusLineで確認可能**: 画面下部のstatusLineで、どの設定ファイルが適用されているか確認できます。
+Claude Code は以下の優先順位で設定を読み込み、後勝ちでディープマージする:
 
 ```text
-settings: ~/.claude/settings.json
+優先度（低） ~/.claude/settings.json           — Global設定（このリポジトリ）
+           .claude/settings.json             — Project設定（チーム共有）
+優先度（高） .claude/settings.local.json       — Local設定（個人用、gitignore推奨）
 ```
-User設定のみの場合。プロジェクト設定がある場合は優先順位付きで表示されます:
-```text
-settings: ~/.claude/settings.json < ~/project/.claude/settings.json < ~/project/.claude/settings.local.json
-```
+
+statusLine の `settings:` 行で、現在適用されている設定ファイルを確認できる:
+
+| 構成 | statusLine 表示 |
+|---|---|
+| Global設定のみ | `settings: ~/.claude/settings.json` |
+| Global + Project設定 | `settings: ~/.claude/settings.json < {workspace}/.claude/settings.json` |
+| Global + Local設定 | `settings: ~/.claude/settings.json < {workspace}/.claude/settings.local.json` |
+| Global + Project + Local設定 | `settings: ~/.claude/settings.json < {workspace}/.claude/settings.json < {workspace}/.claude/settings.local.json` |
+
+特定のプロジェクトだけ設定を変えたい場合のみ、Project設定やLocal設定を追加すればよい。
 
 ## カスタマイズ
 
-### 確認プロンプトを完全に無効化する
+### 確認プロンプトの無効化
 
-Claudeの作業を長時間監視できない場合、確認プロンプトを完全に無効化できます。
+`~/.claude/settings.json` の `permissions.allow` から `AskUserQuestion` を削除すると、Claudeが確認なしで作業を進める。<br>
+予期しない変更が発生する可能性があるため、信頼できるタスクのみで使用すること。
 
-**方法**: `~/.claude/settings.json`の`permissions.allow`から`AskUserQuestion`を削除
+### ブロックコマンドの変更
 
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash",
-      "Read(//**)",
-      // ... 他の設定 ...
-      // "AskUserQuestion"  ← この行を削除またはコメントアウト
-    ]
-  }
-}
-```
-
-**影響**: Claudeが確認なしで作業を進めます。予期しない変更が発生する可能性があるため、信頼できるタスクのみで使用してください。
-
-### ブロックされるコマンドをカスタマイズする
-
-現在ブロックされるコマンド:
-- `rm -rf /`, `rm -rf ~` - ファイルシステムの破壊
-- `dd if=/dev/zero` - ディスクの破壊
-- `shutdown`, `reboot` - システム停止
-- `git push --force` - Git強制push
-
-**変更方法**: `~/.claude/settings.json`の`permissions.deny`を編集してください。
+ブロック対象は `~/.claude/settings.json` の `permissions.deny` に定義されている。<br>
+追加・削除する場合は `permissions.deny` を直接編集する。
 
 ## トラブルシューティング
 
-### MCP Puppeteerが動作しない
+### `/mcp` で `puppeteer` が表示されない
 
-**確認方法**:
-```bash
-claude
-/mcp
-```
+1. Claude Code CLI と npm が両方インストールされているか確認
+2. `bash init.sh` を再実行
+3. 新しいセッションを起動（`claude -r` ではなく `claude`）
 
-**対処方法**:
-1. Claude Code CLIとnpmが両方インストールされているか確認
-2. `bash init.sh`を再実行
-3. 新しいClaude Codeセッションを起動（`claude -r`ではなく`claude`）
+### Global設定（本リポジトリの設定）が反映されない
 
-### 設定が反映されない
+statusLine の `settings:` 行で、`~/.claude/settings.json` が表示されているか確認する。<br>
+プロジェクト内に `.claude/settings.json` や `.claude/settings.local.json` がある場合、そちらが優先されて Global 設定が上書きされる。<br>
+プロジェクト固有の設定を削除するか、Global 設定の内容をプロジェクト設定にコピーして対応する。
 
-**確認方法**: 画面下部のstatusLineで`settings: ~/.claude/settings.json`が表示されているか確認
-
-**対処方法**:
-- プロジェクト内に`.claude/settings.json`や`.claude/settings.local.json`がある場合、そちらが優先されます（statusLineの`settings:`行で確認可能）
-- プロジェクト固有の設定を削除するか、このリポジトリの設定をプロジェクト設定にコピーしてください
-
-## 別のMacでのセットアップ
-
-同じ手順で`~/.claude`にクローンして`bash init.sh`を実行するだけで、同じ環境が構築されます。
-
-```bash
-# 既存設定のバックアップ
-if [ -d ~/.claude ]; then
-  mv ~/.claude ~/.claude_$(date +"%Y%m%d%H%M%S")
-fi
-
-# クローンとセットアップ
-git clone git@github.com:mg1986jp/claude-sync.git ~/.claude
-cd ~/.claude
-bash init.sh
-```

@@ -38,10 +38,16 @@ get_json() {
     echo "$input" | jq -r "$path // \"$default\"" 2>/dev/null || echo "$default"
   else
     local key=${path##*.}
+    # 親キーが存在する場合（2階層以上）、親オブジェクトの範囲に絞り込んでからキーを検索
+    local parent=$(echo "$path" | sed 's/\.[^.]*$//' | sed 's/.*\.//')
+    local search_text="$input"
+    if [ "$parent" != "$key" ]; then
+      search_text=$(echo "$input" | tr -d '\n' | grep -o "\"$parent\"[[:space:]]*:[[:space:]]*{[^}]*}" 2>/dev/null || echo "$input")
+    fi
     local result
-    result=$(echo "$input" | grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" 2>/dev/null | head -1 | sed 's/.*":\s*"\(.*\)"/\1/' || true)
+    result=$(echo "$search_text" | grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" 2>/dev/null | head -1 | sed 's/.*":\s*"\(.*\)"/\1/' || true)
     if [ -z "$result" ]; then
-      result=$(echo "$input" | grep -o "\"$key\"[[:space:]]*:[[:space:]]*[0-9.]*" 2>/dev/null | head -1 | sed 's/.*:[[:space:]]*//' || true)
+      result=$(echo "$search_text" | grep -o "\"$key\"[[:space:]]*:[[:space:]]*[0-9.]*" 2>/dev/null | head -1 | sed 's/.*:[[:space:]]*//' || true)
     fi
     echo "${result:-$default}"
   fi

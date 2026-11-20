@@ -35,6 +35,7 @@ skills/
 teams/
 downloads/
 memory/
+tmp/
 
 # ----- Plugins -----
 plugins/

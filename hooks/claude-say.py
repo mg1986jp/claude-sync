@@ -31,7 +31,7 @@ import time
 # --- 設定 ---
 VOICE = os.environ.get("CLAUDE_SAY_VOICE", "Kyoko")
 RATE = int(os.environ.get("CLAUDE_SAY_RATE", "260"))  # 標準は約200、1.3倍で260
-WORK_DIR = os.path.join(os.path.expanduser("~/Desktop"), "claude-say")
+WORK_DIR = os.path.join(os.path.expanduser("~/.claude"), "tmp", "claude-say")
 LOCK_DIR = os.path.join(WORK_DIR, "lock")
 STATE_FILE = os.path.join(WORK_DIR, "state")  # PID:SESSION_ID を記録
 STALE_CHECK_INTERVAL = 2  # ロック待ち中のステイルチェック間隔（秒）
@@ -253,13 +253,25 @@ class SpeechQueue:
             return False
 
     def _cleanup_tmp_files(self) -> None:
+        my_pid = str(os.getpid())
+        now = time.time()
         try:
             for name in os.listdir(WORK_DIR):
-                if name.startswith("state.tmp."):
+                if not name.startswith("state.tmp."):
+                    continue
+                path = os.path.join(WORK_DIR, name)
+                if name == f"state.tmp.{my_pid}":
                     try:
-                        os.remove(os.path.join(WORK_DIR, name))
+                        os.remove(path)
                     except OSError:
                         pass
+                    continue
+                try:
+                    age = now - os.path.getmtime(path)
+                    if age > 10:
+                        os.remove(path)
+                except OSError:
+                    pass
         except OSError:
             pass
 

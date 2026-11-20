@@ -177,9 +177,7 @@ class SpeechQueue:
                 if self._is_stale():
                     self._cleanup_lock()
                     continue
-                if self._is_same_session():
-                    # 同じタブ: 前のプロセスだけを止めて差し替え
-                    self._kill_previous()
+                if self._try_replace_same_session():
                     time.sleep(0.3)  # シグナルハンドラがロック解放するのを待つ
                     continue
                 # 別タブ: 順番待ち
@@ -215,26 +213,24 @@ class SpeechQueue:
         except (FileNotFoundError, ValueError, OSError):
             return None, None
 
-    def _is_same_session(self) -> bool:
-        _, session = self._read_state()
-        return session == self._session_id
-
-    def _kill_previous(self) -> None:
-        """前のプロセスに SIGTERM を送り、終了を待つ"""
-        pid, _ = self._read_state()
+    def _try_replace_same_session(self) -> bool:
+        """同じセッションなら前のプロセスを止めて True を返す。別セッションなら False。"""
+        pid, session = self._read_state()
+        if session != self._session_id:
+            return False
         if pid is None:
-            return
+            return False
         try:
             os.kill(pid, signal.SIGTERM)
         except (ProcessLookupError, PermissionError):
-            return
-        # 最大2秒間、プロセスの終了を待つ
+            return True
         for _ in range(20):
             try:
                 os.kill(pid, 0)
                 time.sleep(0.1)
             except ProcessLookupError:
-                return
+                return True
+        return True
 
     def _is_stale(self) -> bool:
         pid, _ = self._read_state()
@@ -314,7 +310,7 @@ def _extract_last_turn_text(transcript_path: str) -> str:
         if entry_type == "assistant":
             msg = entry.get("message", {})
             content = msg.get("content", [])
-            for block in content:
+            for block in reversed(content):
                 if isinstance(block, dict) and block.get("type") == "text":
                     text_parts.append(block["text"])
 
@@ -352,10 +348,11 @@ def main():
     cwd = input_data.get("cwd", "")
     folder_name = os.path.basename(cwd) if cwd else ""
 
-    # 末尾から探して最後の <speak>...</speak> だけを抽出する
+    # 末尾の <speak>...</speak> だけを要約として採用する
+    # </speak> の後ろが空白のみの場合に限り、途中のタグは無視して全文処理に進む
     end = message.rfind("</speak>")
     start = message.rfind("<speak>", 0, end) if end != -1 else -1
-    if start != -1 and end != -1:
+    if start != -1 and end != -1 and message[end + len("</speak>"):].strip() == "":
         clean_text = message[start + len("<speak>"):end].strip()
     else:
         processor = TextProcessor()

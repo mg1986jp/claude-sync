@@ -231,6 +231,8 @@ class SpeechQueue:
 
             self._meta_lock()
             try:
+                if not self._is_latest_request():
+                    continue
                 try:
                     os.mkdir(LOCK_DIR)
                 except FileExistsError:

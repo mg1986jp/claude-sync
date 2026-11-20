@@ -248,9 +248,14 @@ class SpeechQueue:
                     else:
                         action = "wait"
                 else:
-                    self._locked = True
-                    self._write_state()
-                    action = "acquired"
+                    try:
+                        self._write_state()
+                    except OSError:
+                        self._cleanup_lock_locked()
+                        action = "retry"
+                    else:
+                        self._locked = True
+                        action = "acquired"
             finally:
                 self._meta_unlock()
 
@@ -271,7 +276,9 @@ class SpeechQueue:
             return
         self._meta_lock()
         try:
-            self._cleanup_lock_locked()
+            pid, _ = self._read_state()
+            if pid == os.getpid():
+                self._cleanup_lock_locked()
         finally:
             self._meta_unlock()
         self._locked = False
@@ -287,7 +294,9 @@ class SpeechQueue:
         except (IOError, OSError):
             return
         try:
-            self._cleanup_lock_locked()
+            pid, _ = self._read_state()
+            if pid == os.getpid():
+                self._cleanup_lock_locked()
         finally:
             try:
                 fcntl.flock(self._meta_fd, fcntl.LOCK_UN)

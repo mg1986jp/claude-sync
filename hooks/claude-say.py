@@ -217,10 +217,13 @@ class SpeechQueue:
         except (FileNotFoundError, OSError):
             return True
 
+    _MAX_RETRIES = 10
+
     def acquire(self) -> bool:
         """ロックを取得する。新しい要求に差し替えられた場合は False を返す。"""
         self._ensure_meta_fd()
         self._register_request()
+        retries = 0
 
         while True:
             if not self._is_latest_request():
@@ -237,16 +240,22 @@ class SpeechQueue:
                     os.mkdir(LOCK_DIR)
                 except FileExistsError:
                     pid, session = self._read_state()
-                    if self._is_pid_dead(pid):
+                    if session == self._READ_ERROR:
+                        action = "wait"
+                    elif self._is_pid_dead(pid):
                         self._cleanup_lock_locked()
                         action = "retry"
                     elif session == self._session_id and pid is not None:
-                        try:
-                            os.kill(pid, signal.SIGTERM)
-                        except (ProcessLookupError, PermissionError):
-                            pass
-                        kill_pid = pid
-                        action = "wait_kill"
+                        if self._is_hook_process(pid):
+                            try:
+                                os.kill(pid, signal.SIGTERM)
+                            except (ProcessLookupError, PermissionError):
+                                pass
+                            kill_pid = pid
+                            action = "wait_kill"
+                        else:
+                            self._cleanup_lock_locked()
+                            action = "retry"
                     else:
                         action = "wait"
                 else:
@@ -264,6 +273,10 @@ class SpeechQueue:
             if action == "acquired":
                 return True
             if action == "retry":
+                retries += 1
+                if retries >= self._MAX_RETRIES:
+                    return False
+                time.sleep(0.1)
                 continue
             if action == "wait_kill":
                 self._wait_for_exit(kill_pid)
@@ -312,15 +325,32 @@ class SpeechQueue:
             f.write(f"{os.getpid()}:{self._session_id}")
         os.replace(tmp, STATE_FILE)
 
+    _READ_ERROR = "error"
+
     def _read_state(self):
-        """(pid, session_id) を返す。読めない場合は (None, None)。"""
+        """(pid, session_id) を返す。ファイルがなければ (None, None)。
+        I/O エラーなら (None, _READ_ERROR) を返し、呼び出し元で区別する。"""
         try:
             with open(STATE_FILE, "r") as f:
                 content = f.read().strip()
             pid_str, session = content.split(":", 1)
             return int(pid_str), session
-        except (FileNotFoundError, ValueError, OSError):
+        except FileNotFoundError:
             return None, None
+        except (ValueError, OSError):
+            return None, self._READ_ERROR
+
+    @staticmethod
+    def _is_hook_process(pid) -> bool:
+        """PID が claude-say.py のプロセスか確認する。PID 再利用対策。"""
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "command="],
+                capture_output=True, text=True, timeout=2,
+            )
+            return "claude-say" in result.stdout
+        except (subprocess.TimeoutExpired, OSError):
+            return False
 
     @staticmethod
     def _is_pid_dead(pid) -> bool:
@@ -429,9 +459,10 @@ def main():
     # </speak> の後ろが空白のみの場合に限り、途中のタグは無視して全文処理に進む
     end = message.rfind("</speak>")
     start = message.rfind("<speak>", 0, end) if end != -1 else -1
+    clean_text = ""
     if start != -1 and end != -1 and message[end + len("</speak>"):].strip() == "":
         clean_text = message[start + len("<speak>"):end].strip()
-    else:
+    if not clean_text:
         processor = TextProcessor()
         clean_text = processor.process(message)
 

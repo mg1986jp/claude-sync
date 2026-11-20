@@ -37,10 +37,31 @@
       "Bash(git push --force-with-lease:*)"
     ]
   },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/claude-say.py",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
   "statusLine": {
     "type": "command",
     "command": "bash ~/.claude/scripts/status-line.sh"
   },
   "outputStyle": "Explanatory",
-  "language": "Japanese"
+  "language": "Japanese",
+  "tui": "fullscreen",
+  "theme": "dark-ansi",
+  "voiceEnabled": true,
+  "voice": {
+    "enabled": true,
+    "mode": "tap"
+  }
 }

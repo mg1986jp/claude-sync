@@ -29,6 +29,9 @@ debug/
 # ----- Lock Files -----
 .update.lock
 
+# ----- Runtime Data -----
+tmp/
+
 # ----- Plugins -----
 plugins/
 

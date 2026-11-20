@@ -13,12 +13,12 @@ hooks.Stop に async: true で登録し、バックグラウンドで動作す�
   別のタブ（別セッション）→ 順番待ち
   手動の say は一切触らない
 
-排他制御の実装:
-  fcntl.flock でメタデータ操作を直列化し、mkdir で読み上げの占有権を管理する。
-  macOS/POSIX 専用。Windows 移植時は msvcrt.locking 等に置き換えること。
+構成（将来の Windows 移植を考慮して分離）:
+  TextProcessor  - Markdown 除去・コードブロック置換（OS 非依存）
+  MacTTS         - say コマンド呼び出し（macOS 固有）
+  SpeechQueue    - mkdir ベースの排他制御（OS 非依存）
 """
 
-import fcntl
 import hashlib
 import json
 import os
@@ -36,7 +36,6 @@ RATE = int(os.environ.get("CLAUDE_SAY_RATE", "260"))
 WORK_DIR = os.path.join(os.path.expanduser("~/.claude"), "tmp", "claude-say")
 LOCK_DIR = os.path.join(WORK_DIR, "lock")
 STATE_FILE = os.path.join(WORK_DIR, "state")
-META_LOCK_FILE = os.path.join(WORK_DIR, "meta.lock")
 STALE_CHECK_INTERVAL = 2
 
 
@@ -171,40 +170,61 @@ def get_tts_backend():
 
 
 # ============================================================
-# 排他制御（fcntl.flock + mkdir + セッション番号による差し替え）
+# 排他制御（mkdir ロック + セッション番号による差し替え）
 # ============================================================
 class SpeechQueue:
-    """fcntl.flock でメタデータ操作を直列化し、mkdir で読み上げの占有権を管理する。
+    """mkdir ロックによる排他制御
 
     同じセッション（同じタブ）:
       前の読み上げプロセスに SIGTERM を送って差し替える。
-      同じセッションに新しい要求があれば、古い待ちプロセスは自主終了する。
+      待っている間に同じタブから新しい返事が来たら、読まずに終了する。
 
     別セッション（別タブ）:
       ロックが解放されるまで順番待ちする。
     """
 
+    MAX_RETRIES = 10
+
     def __init__(self, session_id: str):
         self._session_id = session_id
         self._locked = False
-        self._meta_fd = None
         self._request_id = uuid.uuid4().hex
         session_hash = hashlib.sha256(session_id.encode()).hexdigest()[:16]
         self._latest_path = os.path.join(WORK_DIR, f"latest-{session_hash}")
 
-    def _ensure_meta_fd(self):
-        if self._meta_fd is None:
-            os.makedirs(WORK_DIR, exist_ok=True)
-            self._meta_fd = os.open(META_LOCK_FILE, os.O_RDWR | os.O_CREAT)
+    def acquire(self) -> bool:
+        """ロックを取得する。同じタブの新しい返事に追い越されたら False を返す。"""
+        os.makedirs(WORK_DIR, exist_ok=True)
+        self._register_request()
+        retries = 0
+        while self._is_latest_request():
+            try:
+                os.mkdir(LOCK_DIR)
+            except FileExistsError:
+                pid, session = self._read_state()
+                if self._is_stale(pid):
+                    retries += 1
+                    if retries > self.MAX_RETRIES:
+                        return False
+                    self._cleanup_lock()
+                    time.sleep(0.1)
+                elif session == self._session_id:
+                    self._stop_previous(pid)
+                else:
+                    time.sleep(STALE_CHECK_INTERVAL)
+                continue
+            self._locked = True
+            self._write_state()
+            return True
+        return False
 
-    def _meta_lock(self):
-        fcntl.flock(self._meta_fd, fcntl.LOCK_EX)
+    def release(self) -> None:
+        if not self._locked:
+            return
+        self._cleanup_lock()
+        self._locked = False
 
-    def _meta_unlock(self):
-        fcntl.flock(self._meta_fd, fcntl.LOCK_UN)
-
-    def _register_request(self):
-        """自分の要求IDをセッションの最新として登録する。"""
+    def _register_request(self) -> None:
         tmp = f"{self._latest_path}.{os.getpid()}"
         with open(tmp, "w") as f:
             f.write(self._request_id)
@@ -214,148 +234,32 @@ class SpeechQueue:
         try:
             with open(self._latest_path, "r") as f:
                 return f.read().strip() == self._request_id
-        except (FileNotFoundError, OSError):
+        except OSError:
             return True
 
-    _MAX_RETRIES = 10
-
-    def acquire(self) -> bool:
-        """ロックを取得する。新しい要求に差し替えられた場合は False を返す。"""
-        self._ensure_meta_fd()
-        self._register_request()
-        retries = 0
-
-        while True:
-            if not self._is_latest_request():
-                return False
-
-            action = None
-            kill_pid = None
-
-            self._meta_lock()
-            try:
-                if not self._is_latest_request():
-                    continue
-                try:
-                    os.mkdir(LOCK_DIR)
-                except FileExistsError:
-                    pid, session = self._read_state()
-                    if session == self._READ_ERROR:
-                        action = "wait"
-                    elif self._is_pid_dead(pid):
-                        self._cleanup_lock_locked()
-                        action = "retry"
-                    elif session == self._session_id and pid is not None:
-                        if self._is_hook_process(pid):
-                            try:
-                                os.kill(pid, signal.SIGTERM)
-                            except (ProcessLookupError, PermissionError):
-                                pass
-                            kill_pid = pid
-                            action = "wait_kill"
-                        else:
-                            self._cleanup_lock_locked()
-                            action = "retry"
-                    else:
-                        action = "wait"
-                else:
-                    try:
-                        self._write_state()
-                    except OSError:
-                        self._cleanup_lock_locked()
-                        action = "retry"
-                    else:
-                        self._locked = True
-                        action = "acquired"
-            finally:
-                self._meta_unlock()
-
-            if action == "acquired":
-                return True
-            if action == "retry":
-                retries += 1
-                if retries >= self._MAX_RETRIES:
-                    return False
-                time.sleep(0.1)
-                continue
-            if action == "wait_kill":
-                self._wait_for_exit(kill_pid)
-                time.sleep(0.3)
-            else:
-                time.sleep(STALE_CHECK_INTERVAL)
-
-    def release(self):
-        if not self._locked:
-            return
-        if self._meta_fd is None:
-            return
-        self._meta_lock()
-        try:
-            pid, _ = self._read_state()
-            if pid == os.getpid():
-                self._cleanup_lock_locked()
-        finally:
-            self._meta_unlock()
-        self._locked = False
-
-    def release_from_signal(self):
-        """シグナルハンドラ用。LOCK_NB で取得を試み、失敗したら何もしない。"""
-        if not self._locked:
-            return
-        if self._meta_fd is None:
-            return
-        try:
-            fcntl.flock(self._meta_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (IOError, OSError):
-            return
-        try:
-            pid, _ = self._read_state()
-            if pid == os.getpid():
-                self._cleanup_lock_locked()
-        finally:
-            try:
-                fcntl.flock(self._meta_fd, fcntl.LOCK_UN)
-            except (IOError, OSError):
-                pass
-        self._locked = False
-
-    def _write_state(self):
+    def _write_state(self) -> None:
         tmp = f"{STATE_FILE}.tmp.{os.getpid()}"
         with open(tmp, "w") as f:
             f.write(f"{os.getpid()}:{self._session_id}")
         os.replace(tmp, STATE_FILE)
 
-    _READ_ERROR = "error"
-
     def _read_state(self):
-        """(pid, session_id) を返す。ファイルがなければ (None, None)。
-        I/O エラーなら (None, _READ_ERROR) を返し、呼び出し元で区別する。"""
+        """(pid, session_id) を返す。読めない場合は (None, None)。"""
         try:
             with open(STATE_FILE, "r") as f:
                 content = f.read().strip()
             pid_str, session = content.split(":", 1)
             return int(pid_str), session
-        except FileNotFoundError:
-            return None, None
         except (ValueError, OSError):
-            return None, self._READ_ERROR
+            return None, None
 
-    @staticmethod
-    def _is_hook_process(pid) -> bool:
-        """PID が claude-say.py のプロセスか確認する。PID 再利用対策。"""
-        try:
-            result = subprocess.run(
-                ["ps", "-p", str(pid), "-o", "command="],
-                capture_output=True, text=True, timeout=2,
-            )
-            return "claude-say" in result.stdout
-        except (subprocess.TimeoutExpired, OSError):
-            return False
-
-    @staticmethod
-    def _is_pid_dead(pid) -> bool:
+    def _is_stale(self, pid) -> bool:
         if pid is None:
-            return True
+            # mkdir 直後で state がまだ書かれていない場合があるため、猶予を置く
+            try:
+                return time.time() - os.path.getctime(LOCK_DIR) > 5
+            except OSError:
+                return True
         try:
             os.kill(pid, 0)
             return False
@@ -364,33 +268,32 @@ class SpeechQueue:
         except PermissionError:
             return False
 
-    def _cleanup_lock_locked(self):
-        """メタロック内で呼ぶこと。state・tmp・lock dir を掃除する。"""
+    @staticmethod
+    def _stop_previous(pid) -> None:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            return
+        for _ in range(20):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.1)
+
+    def _cleanup_lock(self) -> None:
         try:
             os.remove(STATE_FILE)
         except OSError:
             pass
-        self._cleanup_tmp_files()
-        try:
-            os.rmdir(LOCK_DIR)
-        except OSError:
-            pass
-
-    def _cleanup_tmp_files(self):
-        """自分の PID の一時ファイルだけを消す。他プロセスのものには触らない。"""
         try:
             os.remove(f"{STATE_FILE}.tmp.{os.getpid()}")
         except OSError:
             pass
-
-    @staticmethod
-    def _wait_for_exit(pid):
-        for _ in range(20):
-            try:
-                os.kill(pid, 0)
-                time.sleep(0.1)
-            except ProcessLookupError:
-                return
+        try:
+            os.rmdir(LOCK_DIR)
+        except OSError:
+            pass
 
 
 # ============================================================
@@ -457,14 +360,16 @@ def main():
 
     # 末尾の <speak>...</speak> だけを要約として採用する
     # </speak> の後ろが空白のみの場合に限り、途中のタグは無視して全文処理に進む
+    # 末尾の要約が空なら、そのタグを除いた本文を読む
     end = message.rfind("</speak>")
     start = message.rfind("<speak>", 0, end) if end != -1 else -1
     clean_text = ""
     if start != -1 and end != -1 and message[end + len("</speak>"):].strip() == "":
         clean_text = message[start + len("<speak>"):end].strip()
+        if not clean_text:
+            message = message[:start]
     if not clean_text:
-        processor = TextProcessor()
-        clean_text = processor.process(message)
+        clean_text = TextProcessor().process(message)
 
     if not clean_text:
         sys.exit(0)
@@ -479,7 +384,7 @@ def main():
     def handle_signal(signum, frame):
         if tts._proc and tts._proc.poll() is None:
             tts._proc.kill()
-        queue.release_from_signal()
+        queue.release()
         os._exit(0)
 
     signal.signal(signal.SIGTERM, handle_signal)

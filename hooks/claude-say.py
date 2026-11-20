@@ -192,6 +192,7 @@ class SpeechQueue:
             os.remove(STATE_FILE)
         except OSError:
             pass
+        self._cleanup_tmp_files()
         try:
             os.rmdir(LOCK_DIR)
         except OSError:
@@ -199,8 +200,10 @@ class SpeechQueue:
         self._locked = False
 
     def _write_state(self) -> None:
-        with open(STATE_FILE, "w") as f:
+        tmp = f"{STATE_FILE}.tmp.{os.getpid()}"
+        with open(tmp, "w") as f:
             f.write(f"{os.getpid()}:{self._session_id}")
+        os.replace(tmp, STATE_FILE)
 
     def _read_state(self):
         """(pid, session_id) を返す。読めない場合は (None, None)。"""
@@ -236,7 +239,11 @@ class SpeechQueue:
     def _is_stale(self) -> bool:
         pid, _ = self._read_state()
         if pid is None:
-            return True
+            try:
+                lock_age = time.time() - os.path.getctime(LOCK_DIR)
+                return lock_age > 5
+            except OSError:
+                return True
         try:
             os.kill(pid, 0)
             return False
@@ -245,11 +252,23 @@ class SpeechQueue:
         except PermissionError:
             return False
 
+    def _cleanup_tmp_files(self) -> None:
+        try:
+            for name in os.listdir(WORK_DIR):
+                if name.startswith("state.tmp."):
+                    try:
+                        os.remove(os.path.join(WORK_DIR, name))
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
     def _cleanup_lock(self) -> None:
         try:
             os.remove(STATE_FILE)
         except OSError:
             pass
+        self._cleanup_tmp_files()
         try:
             os.rmdir(LOCK_DIR)
         except OSError:

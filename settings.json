@@ -56,12 +56,5 @@
     "command": "bash ~/.claude/scripts/status-line.sh"
   },
   "outputStyle": "Explanatory",
-  "language": "Japanese",
-  "tui": "fullscreen",
-  "theme": "dark-ansi",
-  "voiceEnabled": true,
-  "voice": {
-    "enabled": true,
-    "mode": "tap"
-  }
+  "language": "Japanese"
 }

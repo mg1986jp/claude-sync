@@ -28,13 +28,8 @@ debug/
 
 # ----- Lock Files -----
 .update.lock
-.last-cleanup
 
 # ----- Runtime Data -----
-skills/
-teams/
-downloads/
-memory/
 tmp/
 
 # ----- Plugins -----

@@ -473,8 +473,9 @@ class SpeechQueue {
     } else {
       try {
         process.kill(pid, 'SIGTERM');
-      } catch {
-        return StopResult.STOPPED;
+      } catch (err) {
+        // ESRCH はもう終わっている。EPERM など止められなかったときは、試し直しの回数に数えさせる（MAX_RETRIES で打ち切る）
+        return err.code === 'ESRCH' ? StopResult.STOPPED : StopResult.KILL_FAILED;
       }
     }
     for (let i = 0; i < 20; i++) {

@@ -364,6 +364,8 @@ class SpeechQueue {
       } catch (err) {
         if (err.code !== 'EEXIST') throw err;
         const { pid, session } = this.#readState();
+        // 状態を読んだあとに確かめ直す。同じタブの新しい返事がもうロックを取っていたら、それを止めずに終わる
+        if (!this.#isLatestRequest()) return false;
         if (this.#isStale(pid)) {
           if (!this.#countRetry()) return false;
           this.#cleanupLock();
@@ -383,6 +385,11 @@ class SpeechQueue {
         continue;
       }
       this.#locked = true;
+      // ロックを取ったあとにも確かめ直す。同じタブの新しい返事が来ていたら、ロックを譲って終わる
+      if (!this.#isLatestRequest()) {
+        this.release();
+        return false;
+      }
       this.#writeState();
       return true;
     }

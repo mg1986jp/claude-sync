@@ -9,6 +9,7 @@ session-env/
 shell-snapshots/
 file-history/
 jobs/
+teams/
 
 # ----- Personal Data -----
 todos/
@@ -49,6 +50,7 @@ backups/
 .last-update-result.json
 sounds/
 skills/
+downloads/
 
 # ----- macOS -----
 .DS_Store

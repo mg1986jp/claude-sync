@@ -68,5 +68,14 @@
     "enabled": true,
     "mode": "tap"
   },
-  "theme": "auto"
+  "theme": "auto",
+  "tui": "fullscreen",
+  "autoCompactEnabled": true,
+  "fileCheckpointingEnabled": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "git commit and git push to the working repository are allowed"
+    ]
+  }
 }

@@ -8,6 +8,8 @@ sessions/
 session-env/
 shell-snapshots/
 file-history/
+jobs/
+teams/
 
 # ----- Personal Data -----
 todos/
@@ -16,6 +18,8 @@ plans/
 projects/
 settings.local.json
 project-config.json
+.credentials.json
+feedback/
 
 # ----- Cache & Analytics -----
 stats-cache.json
@@ -25,9 +29,14 @@ telemetry/*
 
 # ----- Debug Logs -----
 debug/
+daemon.log
 
 # ----- Lock Files -----
 .update.lock
+
+# ----- Runtime Data -----
+tmp/
+daemon/
 
 # ----- Plugins -----
 plugins/
@@ -35,6 +44,13 @@ plugins/
 # ----- Backup Files -----
 backups/
 *.bak.*
+
+# ----- Machine-local State -----
+.last-cleanup
+.last-update-result.json
+sounds/
+skills/
+downloads/
 
 # ----- macOS -----
 .DS_Store

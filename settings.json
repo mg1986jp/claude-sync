@@ -1,4 +1,5 @@
 {
+  "model": "opus",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_DISABLE_1M_CONTEXT": "false"
@@ -37,10 +38,44 @@
       "Bash(git push --force-with-lease:*)"
     ]
   },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/claude-say.js\"",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
   "statusLine": {
     "type": "command",
     "command": "bash ~/.claude/scripts/status-line.sh"
   },
   "outputStyle": "Explanatory",
-  "language": "Japanese"
+  "language": "Japanese",
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "xhigh"
+    }
+  },
+  "autoUpdatesChannel": "latest",
+  "voice": {
+    "enabled": true,
+    "mode": "tap"
+  },
+  "theme": "auto",
+  "tui": "fullscreen",
+  "autoCompactEnabled": true,
+  "fileCheckpointingEnabled": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "git commit and git push to the working repository are allowed"
+    ]
+  }
 }

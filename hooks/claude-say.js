@@ -456,6 +456,7 @@ class SpeechQueue {
 
   /**
    * 前の読み上げを止め、プロセスが終わるまで最大2秒待つ。結果は StopResult で返す。
+   * 2秒待っても終わらなければ KILL_FAILED を返す。
    *
    * Windows では process.kill() が SIGTERM でも即座に終了させるため、前のプロセスの後片付け
    * （子の PowerShell を止める、ロックを解放する）が動かない。そこで taskkill で子プロセスごと止める。
@@ -480,7 +481,8 @@ class SpeechQueue {
       if (!isProcessAlive(pid)) return StopResult.STOPPED;
       await sleep(100);
     }
-    return StopResult.STOPPED;
+    // 2秒待っても終わらなければ止められなかったとみなし、試し直しの回数に数えさせる（MAX_RETRIES で打ち切る）
+    return StopResult.KILL_FAILED;
   }
 
   /**

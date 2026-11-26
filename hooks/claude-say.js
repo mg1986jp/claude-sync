@@ -16,8 +16,15 @@
  * 構成:
  *   TextProcessor  - Markdown 除去・コードブロック置換（OS 非依存）
  *   MacTTS         - say コマンド呼び出し（macOS 固有）
- *   getTtsBackend  - OS ごとの TTS の選択（Windows はここに追加する）
- *   SpeechQueue    - mkdir ベースの排他制御（OS 非依存）
+ *   WindowsTTS     - Windows PowerShell 5.1 の System.Speech 呼び出し（Windows 固有）
+ *   getTtsBackend  - OS ごとの TTS の選択
+ *   SpeechQueue    - mkdir ベースの排他制御（OS 非依存。前の読み上げの止め方だけ OS ごとに違う）
+ *
+ * 設定（環境変数）:
+ *   CLAUDE_SAY_VOICE     声の名前（macOS の初期値: Kyoko / Windows の初期値: Microsoft Haruka Desktop）
+ *                        Windows では、指定した声が入っていなければ日本語の声に切り替える
+ *   CLAUDE_SAY_RATE      macOS の速さ（say -r の値。正の整数、初期値 260）
+ *   CLAUDE_SAY_WIN_RATE  Windows の速さ（System.Speech の Rate。-10〜10 の整数、初期値 3 ≒ 標準の約1.4倍）
  *
  * Node の標準モジュールだけで動く（npm パッケージ不要）。
  */
@@ -31,18 +38,34 @@ const { spawn } = require('node:child_process');
 const { setTimeout: sleep } = require('node:timers/promises');
 
 // --- 設定 ---
-const DEFAULT_VOICE = 'Kyoko';
-const DEFAULT_RATE = 260;
-const VOICE = process.env.CLAUDE_SAY_VOICE || DEFAULT_VOICE;
-const RATE = parseRate(process.env.CLAUDE_SAY_RATE);
+// 声の名前も速さの目盛りも OS ごとに違うため、初期値は OS ごとに持つ
+const MAC_DEFAULT_VOICE = 'Kyoko';
+const MAC_DEFAULT_RATE = 260; // say -r の値（1分あたりの語数）
+const WIN_DEFAULT_VOICE = 'Microsoft Haruka Desktop';
+const WIN_DEFAULT_RATE = 3; // System.Speech の Rate（0 が標準の速さ。3 で約1.4倍）
+const WIN_RATE_MIN = -10;
+const WIN_RATE_MAX = 10;
 const WORK_DIR = path.join(os.homedir(), '.claude', 'tmp', 'claude-say');
 const LOCK_DIR = path.join(WORK_DIR, 'lock');
 const STATE_FILE = path.join(WORK_DIR, 'state');
 const STALE_CHECK_INTERVAL_MS = 2000;
 
-function parseRate(value) {
+// Windows のコマンドは絶対パスで呼ぶ（フックは作業中のフォルダで動くため、同名の実行ファイルを拾わないようにする）
+const WIN_SYSTEM32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
+const WIN_POWERSHELL = path.join(WIN_SYSTEM32, 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+const WIN_TASKKILL = path.join(WIN_SYSTEM32, 'taskkill.exe');
+const WIN_TASKLIST = path.join(WIN_SYSTEM32, 'tasklist.exe');
+
+/** say -r に渡す速さ。正の整数でなければ初期値を使う。 */
+function parseMacRate(value) {
   const rate = Number.parseInt(value ?? '', 10);
-  return Number.isInteger(rate) && rate > 0 ? rate : DEFAULT_RATE;
+  return Number.isInteger(rate) && rate > 0 ? rate : MAC_DEFAULT_RATE;
+}
+
+/** System.Speech の Rate に渡す速さ。-10〜10 の整数でなければ初期値を使う。 */
+function parseWinRate(value) {
+  const rate = Number.parseInt(value ?? '', 10);
+  return Number.isInteger(rate) && rate >= WIN_RATE_MIN && rate <= WIN_RATE_MAX ? rate : WIN_DEFAULT_RATE;
 }
 
 // ============================================================
@@ -193,14 +216,78 @@ class MacTTS {
   }
 }
 
+/**
+ * Windows PowerShell 5.1 に -EncodedCommand で渡す読み上げスクリプト
+ *
+ * - 文章は標準入力から UTF-8 のバイト列として読む
+ *   （PowerShell 5.1 は標準入力を OEM コードページ（日本語環境では cp932）で解釈するため、そのままだと化ける）
+ * - 声と速さは環境変数で受け取る（コマンドラインに埋め込むと引用符の扱いが必要になるため）
+ * - 声は「指定した声 → 日本語の女性の声 → 日本語の声」の順に、入っているものを選ぶ
+ * - Speak() は合成しながら再生し、読み終わるまで戻らない
+ */
+const WINDOWS_SPEAK_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+Add-Type -AssemblyName System.Speech
+$buffer = New-Object System.IO.MemoryStream
+[Console]::OpenStandardInput().CopyTo($buffer)
+$text = [System.Text.Encoding]::UTF8.GetString($buffer.ToArray())
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try {
+  $voices = @($synth.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object { $_.VoiceInfo })
+  $japanese = @($voices | Where-Object { $_.Culture.Name -eq 'ja-JP' })
+  $candidates = @($voices | Where-Object { $_.Name -eq $env:CLAUDE_SAY_SAPI_VOICE }) + @($japanese | Where-Object { $_.Gender -eq 'Female' }) + $japanese
+  if ($candidates.Count -gt 0) { $synth.SelectVoice($candidates[0].Name) }
+  $synth.Rate = [int]$env:CLAUDE_SAY_SAPI_RATE
+  $synth.SetOutputToDefaultAudioDevice()
+  $synth.Speak($text)
+} finally {
+  $synth.Dispose()
+}
+`;
+
+/** Windows の System.Speech（SAPI の声）で読み上げる */
+class WindowsTTS {
+  #voice;
+  #rate;
+  #proc = null;
+
+  constructor(voice, rate) {
+    this.#voice = voice;
+    this.#rate = rate;
+  }
+
+  speak(text) {
+    return new Promise((resolve) => {
+      const encoded = Buffer.from(WINDOWS_SPEAK_SCRIPT, 'utf16le').toString('base64');
+      this.#proc = spawn(WIN_POWERSHELL, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
+        stdio: ['pipe', 'inherit', 'inherit'],
+        windowsHide: true,
+        env: { ...process.env, CLAUDE_SAY_SAPI_VOICE: this.#voice, CLAUDE_SAY_SAPI_RATE: String(this.#rate) },
+      });
+      this.#proc.on('error', () => resolve());
+      this.#proc.on('close', () => resolve());
+      this.#proc.stdin.on('error', () => {}); // PowerShell が先に終了した場合の EPIPE を無視する
+      this.#proc.stdin.end(text, 'utf8');
+    });
+  }
+
+  kill() {
+    // 読み上げは PowerShell のプロセスの中で行うため、プロセスを終わらせれば声も止まる
+    if (this.#proc && this.#proc.exitCode === null && this.#proc.signalCode === null) {
+      this.#proc.kill();
+    }
+  }
+}
+
 /** 実行中の OS に応じた TTS バックエンドを返す。対応していない OS では null。 */
 function getTtsBackend() {
+  const voice = process.env.CLAUDE_SAY_VOICE;
   switch (process.platform) {
     case 'darwin':
-      return new MacTTS(VOICE, RATE);
+      return new MacTTS(voice || MAC_DEFAULT_VOICE, parseMacRate(process.env.CLAUDE_SAY_RATE));
     case 'win32':
-      // TODO(Windows): speak(text) と kill() を持つ WindowsTTS を作り、ここで返す
-      return null;
+      return new WindowsTTS(voice || WIN_DEFAULT_VOICE, parseWinRate(process.env.CLAUDE_SAY_WIN_RATE));
     default:
       return null;
   }
@@ -232,7 +319,7 @@ function removeQuietly(remove, target) {
  * mkdir ロックによる排他制御
  *
  * 同じセッション（同じタブ）:
- *   前の読み上げプロセスに SIGTERM を送って差し替える。
+ *   前の読み上げプロセスに SIGTERM を送って差し替える（Windows では taskkill で子プロセスごと止める）。
  *   待っている間に同じタブから新しい返事が来たら、読まずに終了する。
  *
  * 別セッション（別タブ）:
@@ -245,6 +332,7 @@ class SpeechQueue {
   #locked = false;
   #requestId = crypto.randomUUID();
   #latestPath;
+  #orphanRetries = 0;
 
   constructor(sessionId) {
     this.#sessionId = sessionId;
@@ -256,7 +344,6 @@ class SpeechQueue {
   async acquire() {
     fs.mkdirSync(WORK_DIR, { recursive: true });
     this.#registerRequest();
-    let retries = 0;
     while (this.#isLatestRequest()) {
       try {
         fs.mkdirSync(LOCK_DIR);
@@ -264,12 +351,11 @@ class SpeechQueue {
         if (err.code !== 'EEXIST') throw err;
         const { pid, session } = this.#readState();
         if (this.#isStale(pid)) {
-          retries += 1;
-          if (retries > SpeechQueue.MAX_RETRIES) return false;
-          this.#cleanupLock();
-          await sleep(100);
+          if (!(await this.#discardOrphanedLock())) return false;
         } else if (session === this.#sessionId) {
-          await SpeechQueue.#stopPrevious(pid);
+          const stopped = await SpeechQueue.#stopPrevious(pid);
+          // 止める相手が読み上げのプロセスではなかった（PID が使い回されていた）なら、持ち主のいないロックとして片付ける
+          if (!stopped && !(await this.#discardOrphanedLock())) return false;
         } else {
           await sleep(STALE_CHECK_INTERVAL_MS);
         }
@@ -286,6 +372,15 @@ class SpeechQueue {
     if (!this.#locked) return;
     this.#cleanupLock();
     this.#locked = false;
+  }
+
+  /** 持ち主のいないロックを片付ける。片付けが MAX_RETRIES 回を超えたら諦めて false を返す。 */
+  async #discardOrphanedLock() {
+    this.#orphanRetries += 1;
+    if (this.#orphanRetries > SpeechQueue.MAX_RETRIES) return false;
+    this.#cleanupLock();
+    await sleep(100);
+    return true;
   }
 
   #registerRequest() {
@@ -334,16 +429,59 @@ class SpeechQueue {
     return !isProcessAlive(pid);
   }
 
+  /**
+   * 前の読み上げを止め、プロセスが終わるまで最大2秒待つ。
+   * 止める相手が読み上げのプロセスではなかった（PID が別のプロセスに使い回されていた）ときだけ false を返す。
+   *
+   * Windows では process.kill() が SIGTERM でも即座に終了させるため、前のプロセスの後片付け
+   * （子の PowerShell を止める、ロックを解放する）が動かない。そこで taskkill で子プロセスごと止める。
+   * 子プロセスごと止めるので、その前に PID が node.exe のものかを確かめ、違えば止めない。
+   * 残ったロックは、acquire() の次のループで「持ち主のいないロック」として片付く。
+   */
   static async #stopPrevious(pid) {
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-      return;
+    if (process.platform === 'win32') {
+      if (!(await SpeechQueue.#isNodeProcessOnWindows(pid))) return false;
+      await SpeechQueue.#killProcessTreeOnWindows(pid);
+    } else {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        return true;
+      }
     }
     for (let i = 0; i < 20; i++) {
-      if (!isProcessAlive(pid)) return;
+      if (!isProcessAlive(pid)) return true;
       await sleep(100);
     }
+    return true;
+  }
+
+  /** その PID のプロセスが node.exe かを tasklist で確かめる（tasklist が動かないときは false） */
+  static #isNodeProcessOnWindows(pid) {
+    return new Promise((resolve) => {
+      const proc = spawn(WIN_TASKLIST, ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
+      });
+      let output = '';
+      proc.stdout.on('data', (chunk) => {
+        output += chunk.toString('latin1'); // 見るのは ASCII のイメージ名と PID だけなので、文字コードは問わない
+      });
+      proc.on('error', () => resolve(false));
+      proc.on('close', () => {
+        // 例: "node.exe","1234","Console","1","45,678 K"（該当するプロセスがなければ案内の文だけが出る）
+        const match = /^"([^"]*)","(\d+)"/m.exec(output);
+        resolve(match !== null && match[1].toLowerCase() === 'node.exe' && Number(match[2]) === pid);
+      });
+    });
+  }
+
+  static #killProcessTreeOnWindows(pid) {
+    return new Promise((resolve) => {
+      const proc = spawn(WIN_TASKKILL, ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+      proc.on('error', () => resolve());
+      proc.on('close', () => resolve());
+    });
   }
 
   #cleanupLock() {

@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/claude-say.py",
+            "command": "node $HOME/.claude/hooks/claude-say.js",
             "async": true
           }
         ]

@@ -3,6 +3,11 @@
 複数Mac間でClaude Code CLIの設定を共有するためのリポジトリ。<br>
 `~/.claude` にクローンすることで、全プロジェクトに共通設定が自動適用される。
 
+> [!NOTE]
+> このリポジトリを使うと、[voice-reply プラグイン](https://github.com/mg1986jp/voice-reply) で Claude の返事が声で読み上げられる。
+> - 止めるとき：`/voice-reply:toggle off`（再開は `/voice-reply:toggle on`）
+> - 使わないとき：`settings.json` の `enabledPlugins` から `voice-reply@mg1986jp` を、`extraKnownMarketplaces` から `mg1986jp` を消す
+
 ## 主な機能
 
 | 機能 | 説明 |

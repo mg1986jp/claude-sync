@@ -5,6 +5,7 @@
 
 > [!NOTE]
 > このリポジトリを使うと、[voice-reply プラグイン](https://github.com/mg1986jp/voice-reply) で Claude の返事が声で読み上げられる。
+> - 初めて使うとき：プラグインは最初に起動したときに裏で入るため、すぐには読み上げない。シェルで `claude plugin list` を実行し、`voice-reply@mg1986jp` が enabled になったのを確かめてから、Claude Code を起動し直す
 > - 止めるとき：`/voice-reply:toggle off`（再開は `/voice-reply:toggle on`）
 > - 使わないとき：`settings.json` の `enabledPlugins` から `voice-reply@mg1986jp` を、`extraKnownMarketplaces` から `mg1986jp` を消す
 

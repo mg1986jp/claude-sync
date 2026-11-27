@@ -1,13 +1,18 @@
 # claude-sync
 
-複数Mac間でClaude Code CLIの設定を共有するためのリポジトリ。<br>
+複数のPC（Mac・Windows）でClaude Code CLIの設定を共有するためのリポジトリ。<br>
 `~/.claude` にクローンすることで、全プロジェクトに共通設定が自動適用される。
+
+> [!NOTE]
+> このリポジトリを使うと、[voice-reply プラグイン](https://github.com/mg1986jp/voice-reply) で Claude の返事が声で読み上げられる。
+> - 止めるとき：`/voice-reply:toggle off`（再開は `/voice-reply:toggle on`）
+> - 使わないとき：`settings.json` の `enabledPlugins` から `voice-reply@mg1986jp` を、`extraKnownMarketplaces` から `mg1986jp` を消す
 
 ## 主な機能
 
 | 機能 | 説明 |
 |------|------|
-| 設定の共有 | 別のMacでも同じClaude Code環境をすぐに構築できる |
+| 設定の共有 | 別のPC（Mac・Windows）でも同じClaude Code環境をすぐに構築できる |
 | 権限制御 | 危険なコマンド（`rm -rf /`、`git push --force` 等）を自動ブロック |
 | ブラウザ操作 | MCP Puppeteerにより、Claudeがブラウザを操作可能 |
 | AI指示の統一 | コミットメッセージ形式や開発方針をCLAUDE.mdで一元管理 |

@@ -37,20 +37,6 @@
       "Bash(git push --force-with-lease:*)"
     ]
   },
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/.claude/hooks/claude-say.js\"",
-            "async": true
-          }
-        ]
-      }
-    ]
-  },
   "statusLine": {
     "type": "command",
     "command": "bash ~/.claude/scripts/status-line.sh"

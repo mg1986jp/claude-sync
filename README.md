@@ -1,6 +1,6 @@
 # claude-sync
 
-複数Mac間でClaude Code CLIの設定を共有するためのリポジトリ。<br>
+複数のPC（Mac・Windows）でClaude Code CLIの設定を共有するためのリポジトリ。<br>
 `~/.claude` にクローンすることで、全プロジェクトに共通設定が自動適用される。
 
 > [!NOTE]
@@ -12,7 +12,7 @@
 
 | 機能 | 説明 |
 |------|------|
-| 設定の共有 | 別のMacでも同じClaude Code環境をすぐに構築できる |
+| 設定の共有 | 別のPC（Mac・Windows）でも同じClaude Code環境をすぐに構築できる |
 | 権限制御 | 危険なコマンド（`rm -rf /`、`git push --force` 等）を自動ブロック |
 | ブラウザ操作 | MCP Puppeteerにより、Claudeがブラウザを操作可能 |
 | AI指示の統一 | コミットメッセージ形式や開発方針をCLAUDE.mdで一元管理 |
@@ -29,6 +29,8 @@
 ※ Node.js / npm はブラウザ操作機能（MCP Puppeteer）を使う場合に必要。
 
 ### 手順
+
+以下は Mac のターミナルで実行する手順（bash のコマンドと `init.sh` を使う）。
 
 ```bash
 # 1. 既存設定のバックアップ（~/.claude が存在する場合のみ）
@@ -61,7 +63,7 @@ claude
 
 | 確認項目 | 期待結果 |
 |---------|---------|
-| 設定の読み込み | statusLine の `settings:` 行に `~/.claude/settings.json` が表示される（→「[設定の適用範囲](#設定の適用範囲)」参照） |
+| 設定の読み込み（Mac） | statusLine の `settings:` 行に `~/.claude/settings.json` が表示される（→「[設定の適用範囲](#設定の適用範囲)」参照） |
 | 権限制御 | `rm -rf /tmp/test` のような危険なコマンドがブロックされる |
 | MCP Puppeteer（オプション） | `/mcp` を実行して `puppeteer ✔ connected` と表示される |
 
@@ -88,7 +90,7 @@ Claude Code は以下の優先順位で設定を読み込み、後勝ちでデ�
 優先度（高） .claude/settings.local.json       — Local設定（個人用、gitignore推奨）
 ```
 
-statusLine の `settings:` 行で、現在適用されている設定ファイルを確認できる:
+statusLine の `settings:` 行で、現在適用されている設定ファイルを確認できる（statusLine は bash のスクリプト `scripts/status-line.sh` で表示するため Mac 用。Windows では bash がないと表示されない）:
 
 | 構成 | statusLine 表示 |
 |---|---|
@@ -116,12 +118,12 @@ statusLine の `settings:` 行で、現在適用されている設定ファイ�
 ### `/mcp` で `puppeteer` が表示されない
 
 1. Claude Code CLI と npm が両方インストールされているか確認
-2. `bash init.sh` を再実行
+2. `bash init.sh` を再実行（Mac）
 3. 新しいセッションを起動（`claude -r` ではなく `claude`）
 
 ### Global設定（本リポジトリの設定）が反映されない
 
-statusLine の `settings:` 行で、`~/.claude/settings.json` が表示されているか確認する。<br>
+statusLine の `settings:` 行（Mac）で、`~/.claude/settings.json` が表示されているか確認する。<br>
 プロジェクト内に `.claude/settings.json` や `.claude/settings.local.json` がある場合、そちらが優先されて Global 設定が上書きされる。<br>
 プロジェクト固有の設定を削除するか、Global 設定の内容をプロジェクト設定にコピーして対応する。
 

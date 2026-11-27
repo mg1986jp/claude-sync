@@ -48,7 +48,6 @@ backups/
 # ----- Machine-local State -----
 .last-cleanup
 .last-update-result.json
-sounds/
 skills/
 downloads/
 
